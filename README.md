@@ -1,5 +1,4 @@
-<<<<<<< HEAD
-# Platform PR Analytics Dashboard (local MVP)
+# Platform PR Analytics Dashboard 
 
 Flask + AdminLTE + GitHub REST API + SQLite.
 
