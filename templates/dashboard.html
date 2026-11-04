@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Platform PR Analytics</title>
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@4.10.0/dist/css/adminlte.min.css">
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css">
+	</head>
+	<body class="hold-transition sidebar-mini">
+		<div class="wrapper">
+			<nav class="main-header navbar navbar-expand navbar-white navbar-light">
+				<span class="navbar-brand ml-2">Platform PR Analytics</span>
+				<span class="ml-auto text-muted mr-3">Local MVP · GitHub</span>
+			</nav>
+
+			<aside class="main-sidebar sidebar-dark-primary elevation-4">
+				<a href="/" class="brand-link">
+					<i class="fab fa-github ml-3 mr-2"></i>
+					<span class="brand-text">PR Analytics</span>
+				</a>
+				<div class="sidebar">
+					<nav class="mt-2">
+						<ul class="nav nav-pills nav-sidebar flex-column">
+							<li class="nav-item">
+								<a href="/" class="nav-link active">
+									<i class="nav-icon fas fa-chart-line"></i>
+									<p>Overview</p>
+								</a>
+							</li>
+						</ul>
+					</nav>
+				</div>
+			</aside>
+
+			<div class="content-wrapper">
+				<section class="content-header">
+					<div class="container-fluid">
+						<h1>Pull request overview</h1>
+						<p class="text-muted">Break down PR activity by service, application and environment.</p>
+					</div>
+				</section>
+
+				<section class="content">
+					<div class="container-fluid">
+						{% with messages=get_flashed_messages(with_categories=true) %}
+							{% for cat,msg in messages %}
+								<div class="alert alert-{{cat}}">{{msg}}</div>
+							{% endfor %}
+						{% endwith %}
+
+						<div class="mb-3">
+							<form method="post" action="/sync">
+								<button class="btn btn-primary">
+									<i class="bi bi-arrow-repeat mr-1"></i> Sync from GitHub
+								</button>
+							</form>
+						</div>
+
+						<form method="get" class="card card-outline card-secondary">
+							<div class="card-body">
+								<div class="row">
+									<div class="col-md-3">
+										<label>Repository</label>
+										<select class="form-control" name="repo">
+											<option value="">All repositories</option>
+											{% for x in all_data.dimensions.get('repositories',[]) %}
+												<option>{{x}}</option>
+											{% endfor %}
+										</select>
+									</div>
+									<div class="col-md-3">
+										<label>Service</label>
+										<select class="form-control" name="service">
+											<option value="">All services</option>
+											{% for x in all_data.dimensions.services %}
+												<option value="{{x}}" {% if filters.service==x %}selected{% endif %}>{{x}}</option>
+											{% endfor %}
+										</select>
+									</div>
+									<div class="col-md-2">
+										<label>Environment</label>
+										<select class="form-control" name="environment">
+											<option value="">All</option>
+											{% for x in all_data.dimensions.environments %}
+												<option value="{{x}}" {% if filters.environment==x %}selected{% endif %}>{{x}}</option>
+											{% endfor %}
+										</select>
+									</div>
+									<div class="col-md-2">
+										<label>State</label>
+										<select class="form-control" name="state">
+											<option value="">All</option>
+											{% for x in ['open','merged','closed'] %}
+												<option value="{{x}}" {% if filters.state==x %}selected{% endif %}>{{x|title}}</option>
+											{% endfor %}
+										</select>
+									</div>
+									<div class="col-md-2 d-flex align-items-end">
+										<button class="btn btn-secondary btn-block">Filter</button>
+									</div>
+								</div>
+							</div>
+						</form>
+
+						<div class="row">
+							<div class="col-lg-3 col-6">
+								<div class="small-box bg-info">
+									<div class="inner">
+										<h3>{{data.total}}</h3>
+										<p>Total PRs</p>
+									</div>
+									<div class="icon"><i class="bi bi-git"></i></div>
+								</div>
+							</div>
+							<div class="col-lg-3 col-6">
+								<div class="small-box bg-warning">
+									<div class="inner">
+										<h3>{{data.open}}</h3>
+										<p>Open PRs</p>
+									</div>
+									<div class="icon"><i class="bi bi-clock"></i></div>
+								</div>
+							</div>
+							<div class="col-lg-3 col-6">
+								<div class="small-box bg-success">
+									<div class="inner">
+										<h3>{{data.merged}}</h3>
+										<p>Merged PRs</p>
+									</div>
+									<div class="icon"><i class="bi bi-check-lg"></i></div>
+								</div>
+							</div>
+							<div class="col-lg-3 col-6">
+								<div class="small-box bg-secondary">
+									<div class="inner">
+										<h3>{% if data.avg_review is not none %}{{data.avg_review}} h{% else %}—{% endif %}</h3>
+										<p>Avg. first review time</p>
+									</div>
+									<div class="icon"><i class="bi bi-stopwatch"></i></div>
+								</div>
+							</div>
+						</div>
+
+						<div class="row">
+							<div class="col-lg-4">
+								<div class="card">
+									<div class="card-header"><h3 class="card-title">PRs by service</h3></div>
+									<table class="table table-striped mb-0">
+										<thead><tr><th>Service</th><th>PRs</th></tr></thead>
+										<tbody>
+											{% for x,n in data.counts.services.items() %}
+												<tr><td>{{x}}</td><td>{{n}}</td></tr>
+											{% else %}
+												<tr><td colspan="2">No data yet</td></tr>
+											{% endfor %}
+										</tbody>
+									</table>
+								</div>
+							</div>
+							<div class="col-lg-4">
+								<div class="card">
+									<div class="card-header"><h3 class="card-title">PRs by environment</h3></div>
+									<table class="table table-striped mb-0">
+										<thead><tr><th>Environment</th><th>PRs</th></tr></thead>
+										<tbody>
+											{% for x,n in data.counts.environments.items() %}
+												<tr><td>{{x}}</td><td>{{n}}</td></tr>
+											{% else %}
+												<tr><td colspan="2">No data yet</td></tr>
+											{% endfor %}
+										</tbody>
+									</table>
+								</div>
+							</div>
+							<div class="col-lg-4">
+								<div class="card">
+									<div class="card-header"><h3 class="card-title">PRs by application</h3></div>
+									<table class="table table-striped mb-0">
+										<thead><tr><th>Application</th><th>PRs</th></tr></thead>
+										<tbody>
+											{% for x,n in data.counts.applications.items() %}
+												<tr><td>{{x}}</td><td>{{n}}</td></tr>
+											{% else %}
+												<tr><td colspan="2">No data yet</td></tr>
+											{% endfor %}
+										</tbody>
+									</table>
+								</div>
+							</div>
+						</div>
+
+						<div class="card">
+							<div class="card-header"><h3 class="card-title">Pull requests</h3></div>
+							<div class="table-responsive">
+								<table class="table table-hover">
+									<thead>
+										<tr>
+											<th>PR</th>
+											<th>Repo</th>
+											<th>Author</th>
+											<th>Service</th>
+											<th>Environment</th>
+											<th>Application</th>
+											<th>State</th>
+											<th>Created</th>
+										</tr>
+									</thead>
+									<tbody>
+										{% for p in prs %}
+											<tr>
+												<td><a href="{{p.url}}" target="_blank" rel="noopener">#{{p.number}} {{p.title}}</a></td>
+												<td>{{p.repo}}</td>
+												<td>{{p.author}}</td>
+												<td>
+                                                    {% if p.services %}
+                                                        {{ p.services|join(', ') }}
+                                                    {% else %}
+                                                        <span class="badge badge-warning">Unmapped</span>
+                                                    {% endif %}
+                                                    </td>
+                                                    <td>
+                                                    {% if p.environments %}
+                                                        {{ p.environments|join(', ') }}
+                                                    {% else %}
+                                                        <span class="badge badge-warning">Unmapped</span>
+                                                    {% endif %}
+                                                    </td>
+                                                    <td>
+                                                    {% if p.applications %}
+                                                        {{ p.applications|join(', ') }}
+                                                    {% else %}
+                                                        <span class="badge badge-warning">Unmapped</span>
+                                                    {% endif %}
+                                                </td>
+												<td>{{p.state}}</td>
+												<td>{{(p.created or '')[:10]}}</td>
+											</tr>
+										{% else %}
+											<tr>
+												<td colspan="8" class="text-center text-muted">No PR data yet. Configure .env and click Sync from GitHub.</td>
+											</tr>
+										{% endfor %}
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</div>
+				</section>
+			</div>
+
+			<footer class="main-footer">
+				Platform PR Analytics
+				<span class="float-right text-muted">Local development MVP</span>
+			</footer>
+		</div>
+
+		<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.4/dist/jquery.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/admin-lte@4.10.0/dist/js/adminlte.min.js"></script>
+	</body>
+</html>
