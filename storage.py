@@ -7,11 +7,125 @@ def db(path):
 
 def init(path):
     with db(path) as c:
-        c.execute('''CREATE TABLE IF NOT EXISTS prs(repo TEXT, number INTEGER, title TEXT, url TEXT, author TEXT, state TEXT, created TEXT, merged TEXT, first_review_minutes INTEGER, merge_minutes INTEGER, services TEXT, environments TEXT, applications TEXT, paths TEXT, reviewers TEXT, approvers TEXT, PRIMARY KEY(repo,number))''')
+        c.execute('''
+        CREATE TABLE IF NOT EXISTS pr_events (
+        event_key TEXT PRIMARY KEY,
+        repo TEXT NOT NULL,
+        pr_number INTEGER NOT NULL,
+        event_type TEXT NOT NULL,
+        actor TEXT,
+        target TEXT,
+        created_at TEXT,
+        commit_sha TEXT,
+        message TEXT,
+        url TEXT,
+        raw_json TEXT,
+        FOREIGN KEY (repo, pr_number)
+            REFERENCES prs(repo, number)
+    )
+''')
+
+        c.execute('''
+        CREATE TABLE IF NOT EXISTS pr_reviews (
+        review_id INTEGER PRIMARY KEY,
+        repo TEXT NOT NULL,
+        pr_number INTEGER NOT NULL,
+        reviewer TEXT,
+        review_state TEXT,
+        submitted_at TEXT,
+        commit_id TEXT,
+        html_url TEXT,
+        FOREIGN KEY (repo, pr_number)
+            REFERENCES prs(repo, number)
+    )
+''')
+
+
+        # Safely add new PR lifecycle columns to existing databases
+        existing_columns = {
+            row["name"]
+            for row in c.execute("PRAGMA table_info(prs)")
+        }
+
+        new_columns = {
+            "merged_by": "TEXT",
+            "closed_at": "TEXT",
+            "closed_by": "TEXT"
+        }
+
+        for column, definition in new_columns.items():
+            if column not in existing_columns:
+                c.execute(
+                    f"ALTER TABLE prs ADD COLUMN {column} {definition}"
+                )
+
 
 def save(path, p):
     with db(path) as c:
-        c.execute('''INSERT INTO prs VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(repo,number) DO UPDATE SET title=excluded.title,url=excluded.url,author=excluded.author,state=excluded.state,created=excluded.created,merged=excluded.merged,first_review_minutes=excluded.first_review_minutes,merge_minutes=excluded.merge_minutes,services=excluded.services,environments=excluded.environments,applications=excluded.applications,paths=excluded.paths,reviewers=excluded.reviewers,approvers=excluded.approvers''', (p['repo'],p['number'],p['title'],p['url'],p['author'],p['state'],p['created'],p['merged'],p['first_review_minutes'],p['merge_minutes'],json.dumps(p['services']),json.dumps(p['environments']),json.dumps(p['applications']),json.dumps(p['paths']),json.dumps(p['reviewers']),json.dumps(p['approvers'])))
+        c.execute('''
+            INSERT INTO prs (
+                repo, number, title, url, author, state, created, merged,
+                first_review_minutes, merge_minutes,
+                services, environments, applications, paths,
+                reviewers, approvers,
+                first_review_at, latest_review_at,
+                has_review, has_approval, has_changes_requested,
+                merged_by, closed_at, closed_by
+            )
+            VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?
+            )
+            ON CONFLICT(repo, number) DO UPDATE SET
+                title=excluded.title,
+                url=excluded.url,
+                author=excluded.author,
+                state=excluded.state,
+                created=excluded.created,
+                merged=excluded.merged,
+                first_review_minutes=excluded.first_review_minutes,
+                merge_minutes=excluded.merge_minutes,
+                services=excluded.services,
+                environments=excluded.environments,
+                applications=excluded.applications,
+                paths=excluded.paths,
+                reviewers=excluded.reviewers,
+                approvers=excluded.approvers,
+                first_review_at=excluded.first_review_at,
+                latest_review_at=excluded.latest_review_at,
+                has_review=excluded.has_review,
+                has_approval=excluded.has_approval,
+                has_changes_requested=excluded.has_changes_requested,
+                merged_by=excluded.merged_by,
+                closed_at=excluded.closed_at,
+                closed_by=excluded.closed_by
+        ''', (
+            p['repo'],
+            p['number'],
+            p['title'],
+            p['url'],
+            p['author'],
+            p['state'],
+            p['created'],
+            p['merged'],
+            p['first_review_minutes'],
+            p['merge_minutes'],
+            json.dumps(p.get('services', [])),
+            json.dumps(p.get('environments', [])),
+            json.dumps(p.get('applications', [])),
+            json.dumps(p.get('paths', [])),
+            json.dumps(p.get('reviewers', [])),
+            json.dumps(p.get('approvers', [])),
+            p.get('first_review_at'),
+            p.get('latest_review_at'),
+            int(bool(p.get('has_review', False))),
+            int(bool(p.get('has_approval', False))),
+            int(bool(p.get('has_changes_requested', False))),
+            p.get('merged_by'),
+            p.get('closed_at'),
+            p.get('closed_by')
+        ))
 
 def rows(path):
     with db(path) as c: data=[dict(x) for x in c.execute('SELECT * FROM prs ORDER BY created DESC')]
@@ -27,3 +141,135 @@ def summary(data):
     counts={k:{x:sum(x in r[k] for r in data) for x in dimensions[k]} for k in dimensions}
     dimensions['repositories'] = sorted({r['repo'] for r in data})
     return {'total':len(data),'open':len(opened),'merged':len(merged),'closed':sum(r['state']=='closed' for r in data),'avg_review':round(mean(reviews)/60,1) if reviews else None,'avg_merge':round(mean(merges)/60,1) if merges else None,'dimensions':dimensions,'counts':counts}
+
+def save_event(path, event):
+    with db(path) as c:
+        c.execute('''
+            INSERT INTO pr_events (
+                event_key, repo, pr_number, event_type,
+                actor, target, created_at, commit_sha,
+                message, url, raw_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
+            ON CONFLICT(event_key) DO UPDATE SET
+                event_type=excluded.event_type,
+                actor=excluded.actor,
+                target=excluded.target,
+                created_at=excluded.created_at,
+                commit_sha=excluded.commit_sha,
+                message=excluded.message,
+                url=excluded.url,
+                raw_json=excluded.raw_json
+        ''', (
+            event['event_key'],
+            event['repo'],
+            event['pr_number'],
+            event['event_type'],
+            event.get('actor'),
+            event.get('target'),
+            event.get('created_at'),
+            event.get('commit_sha'),
+            event.get('message'),
+            event.get('url'),
+            json.dumps(event.get('raw_json', {}))
+        ))
+
+def save_review(path, review):
+    with db(path) as c:
+        c.execute('''
+            INSERT INTO pr_reviews (
+                review_id, repo, pr_number, reviewer,
+                review_state, submitted_at, commit_id, html_url
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+
+            ON CONFLICT(review_id) DO UPDATE SET
+                reviewer=excluded.reviewer,
+                review_state=excluded.review_state,
+                submitted_at=excluded.submitted_at,
+                commit_id=excluded.commit_id,
+                html_url=excluded.html_url
+        ''', (
+            review['review_id'],
+            review['repo'],
+            review['pr_number'],
+            review.get('reviewer'),
+            review.get('review_state'),
+            review.get('submitted_at'),
+            review.get('commit_id'),
+            review.get('html_url')
+        ))
+
+
+
+def audit_events(path, repo=None, pr_number=None):
+    query = '''
+        SELECT
+            repo,
+            pr_number,
+            event_type AS activity_type,
+            actor,
+            target,
+            created_at,
+            message AS details,
+            url
+        FROM pr_events
+        WHERE event_type != 'reviewed'
+
+        UNION ALL
+
+        SELECT
+            repo,
+            pr_number,
+            'review_submitted' AS activity_type,
+            reviewer AS actor,
+            NULL AS target,
+            submitted_at AS created_at,
+            review_state AS details,
+            html_url AS url
+        FROM pr_reviews
+        UNION ALL
+
+        SELECT
+            repo,
+            number AS pr_number,
+            'created' AS activity_type,
+            author AS actor,
+            NULL AS target,
+            created AS created_at,
+            NULL AS details,
+            NULL AS url
+        FROM prs
+    '''
+
+    # Wrap the UNION before applying filters
+    query = f'''
+        SELECT *
+        FROM ({query}) AS combined_events
+    '''
+
+    conditions = []
+    params = []
+
+    if repo:
+        conditions.append('repo = ?')
+        params.append(repo)
+
+    if pr_number is not None:
+        conditions.append('pr_number = ?')
+        params.append(pr_number)
+
+    if conditions:
+        query += ' WHERE ' + ' AND '.join(conditions)
+
+    query += '''
+        ORDER BY
+            CASE WHEN created_at IS NULL THEN 1 ELSE 0 END,
+            created_at DESC
+    '''
+
+    with db(path) as c:
+        result = c.execute(query, params).fetchall()
+
+    return [dict(row) for row in result]

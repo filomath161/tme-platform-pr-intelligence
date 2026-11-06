@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Platform PR Analytics Dashboard (local MVP)
 
 Flask + AdminLTE + GitHub REST API + SQLite.
@@ -75,9 +74,7 @@ Paths that do not match the convention are ignored for service/application/envir
 3. Validate parser results against a few real PRs.
 4. Add date filters, trend charts, reviewer workload and export.
 5. Add incremental sync and scheduled refresh after the data model is validated.
-=======
 # tme-platform-pr-intelligence
 GitOps visibility · PR auditability · SLA governance · Engineering analytics
 
 A configurable PR governance and engineering analytics platform that provides centralized visibility into pull-request activity, ownership, audit history, and SLA compliance across TME repositories.
->>>>>>> c5f74fb104f9842f57ed2031216b7c6cb44e9703

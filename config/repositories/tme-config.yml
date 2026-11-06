@@ -1,0 +1,51 @@
+repository: tme-config
+
+path_patterns:
+  - name: standard_without_region
+    exclude_roots:
+      - config
+    segments:
+      - service
+      - environment
+      - billing_team
+      - filename
+
+  - name: standard_with_region
+    exclude_roots:
+      - config
+    segments:
+      - service
+      - region
+      - environment
+      - billing_team
+      - filename
+
+  - name: config_without_region
+    root: config
+    segments:
+      - service
+      - environment
+      - billing_team
+      - filename
+
+  - name: config_with_region
+    root: config
+    segments:
+      - service
+      - region
+      - environment
+      - billing_team
+      - filename
+
+validation:
+  environments:
+    - uat
+    - dev
+    - stage
+    - prod
+
+classification:
+  internal_billing_teams:
+    - TSI
+    - TME
+  default: external

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Platform PR Analytics{% endblock %}</title>
+  <title>{% block title %}Platform PR Intelligence{% endblock %}</title>
   <!-- AdminLTE 4.10.0 uses Bootstrap 5 and vanilla JavaScript (no jQuery). -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.11.0/styles/overlayscrollbars.min.css">
@@ -20,7 +20,7 @@
     <div class="container-fluid">
       <ul class="navbar-nav">
         <li class="nav-item"><a class="nav-link" data-lte-toggle="sidebar" href="#" role="button" aria-label="Toggle sidebar"><i class="bi bi-list"></i></a></li>
-        <li class="nav-item d-none d-sm-inline-block"><span class="nav-link fw-bold">Platform PR Analytics</span></li>
+        <li class="nav-item d-none d-sm-inline-block"><span class="nav-link fw-bold">Platform PR Intelligence</span></li>
       </ul>
       <ul class="navbar-nav ms-auto"><li class="nav-item"><span class="nav-link">Local MVP · GitHub</span></li></ul>
     </div>
@@ -35,7 +35,27 @@
     <div class="sidebar-wrapper">
       <nav class="mt-2">
         <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" role="menu" data-accordion="false">
-          <li class="nav-item"><a href="{{ url_for('index') }}" class="nav-link active"><i class="nav-icon bi bi-speedometer2"></i><p>Overview</p></a></li>
+          <li class="nav-item">
+            <a href="{{ url_for('index') }}"
+            class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">
+           <i class="nav-icon bi bi-speedometer2"></i>
+           <p>Overview</p>
+          </a>
+          </li>
+          <li class="nav-item">
+            <a href="{{ url_for('admin') }}"
+            class="nav-link {% if request.endpoint == 'admin' %}active{% endif %}">
+              <i class="nav-icon bi bi-gear"></i>
+              <p>Admin</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="{{ url_for('audit_page') }}"
+              class="nav-link {% if request.endpoint == 'audit_page' %}active{% endif %}">
+                <i class="nav-icon bi bi-clock-history"></i>
+                <p>Audit Trail</p>
+            </a>
+          </li>
           <li class="nav-item"><a href="#service-breakdown" class="nav-link"><i class="nav-icon bi bi-layers"></i><p>Services</p></a></li>
           <li class="nav-item"><a href="#pr-table" class="nav-link"><i class="nav-icon bi bi-git"></i><p>Pull requests</p></a></li>
         </ul>
@@ -68,7 +88,6 @@
       </div>
     </div>
   </main>
-  <footer class="app-footer"><strong>Platform PR Analytics</strong><span class="float-end text-body-secondary">Local development MVP</span></footer>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.min.js"></script>

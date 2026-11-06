@@ -16,3 +16,8 @@ class GitHubClient:
         r=self.s.get(f'{API}/repos/{repo}/pulls/{number}',timeout=30); r.raise_for_status(); return r.json()
     def files(self, repo, number): return self._all(f'{API}/repos/{repo}/pulls/{number}/files', {'per_page':100})
     def reviews(self, repo, number): return self._all(f'{API}/repos/{repo}/pulls/{number}/reviews', {'per_page':100})
+    def timeline(self, repo, number):
+        return self._all(
+            f'{API}/repos/{repo}/issues/{number}/timeline',
+            {'per_page': 100}
+    )

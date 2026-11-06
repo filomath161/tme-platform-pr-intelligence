@@ -1,0 +1,130 @@
+
+{% extends "base.html" %}
+
+{% block title %}Audit Trail | Platform PR Intelligence{% endblock %}
+
+{% block page_heading %}Audit Trail{% endblock %}
+
+{% block content %}
+
+<!-- Filters -->
+<div class="card card-outline card-primary">
+    <div class="card-header">
+        <h3 class="card-title">Filter activities</h3>
+    </div>
+
+    <div class="card-body">
+        <form method="get" action="{{ url_for('audit_page') }}">
+            <div class="row">
+
+                <div class="col-md-5">
+                    <label for="repo">Repository</label>
+                    <select class="form-select" name="repo" id="repo">
+                        <option value="">All repositories</option>
+                        {% for repository in repositories %}
+                        <option value="{{ repository }}"
+                            {% if filters.repo == repository %}selected{% endif %}>
+                            {{ repository }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label for="pr_number">PR number</label>
+                    <input
+                        type="number"
+                        class="form-control"
+                        name="pr_number"
+                        id="pr_number"
+                        placeholder="e.g. 8"
+                        value="{{ filters.pr_number }}">
+                </div>
+
+                <div class="col-md-4 d-flex align-items-end gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-funnel"></i> Apply filters
+                    </button>
+
+                    <a href="{{ url_for('audit_page') }}"
+                       class="btn btn-secondary">
+                        Clear
+                    </a>
+                </div>
+
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Activity summary -->
+<div class="row">
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-info">
+            <div class="inner">
+                <h3>{{ events|length }}</h3>
+                <p>Total activities</p>
+            </div>
+            <div class="icon">
+                <i class="bi bi-clock-history"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Activity table -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Activity history</h3>
+    </div>
+
+    <div class="card-body table-responsive">
+        <table class="table table-bordered table-hover">
+            <thead>
+                <tr>
+                    <th>Repository</th>
+                    <th>PR</th>
+                    <th>Activity</th>
+                    <th>Actor</th>
+                    <th>Target</th>
+                    <th>Details</th>
+                    <th>Date and time</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for event in events %}
+                <tr>
+                    <td>{{ event.repo }}</td>
+
+                    <td>
+                        <a href="{{ event.url or '#' }}" target="_blank">
+                            #{{ event.pr_number }}
+                        </a>
+                    </td>
+
+                    <td>
+                        <span class="badge text-bg-primary">
+                            {{ event.activity_type|replace('_', ' ')|title }}
+                        </span>
+                    </td>
+
+                    <td>{{ event.actor or '—' }}</td>
+                    <td>{{ event.target or '—' }}</td>
+                    <td>{{ event.details or '—' }}</td>
+                    <td>{{ event.created_at or '—' }}</td>
+                </tr>
+
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted">
+                        No activities found for the selected filters.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
