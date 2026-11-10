@@ -160,27 +160,19 @@
 											<th>Application</th>
 											<th>State</th>
 											<th>Created</th>
+                                            <th class="text-center" style="width: 140px;">
+                                                Audit History
+                                            </th>
 										</tr>
 									</thead>
 									<tbody>
 										{% for p in prs %}
 											<tr>
 												<td>
-    <a href="{{p.url}}" target="_blank" rel="noopener">
-        #{{p.number}} {{p.title}}
-    </a>
-
-    <button
-        class="btn btn-sm btn-outline-primary mt-1"
-        type="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#audit-{{ loop.index }}"
-        aria-expanded="false"
-        aria-controls="audit-{{ loop.index }}">
-        <i class="bi bi-clock-history"></i>
-        Audit History
-    </button>
-</td>
+                                                    <a href="{{p.url}}" target="_blank" rel="noopener">
+                                                        #{{p.number}} {{p.title}}
+                                                    </a>
+                                                </td>
 												<td>{{p.repo}}</td>
 												<td>{{p.author}}</td>
 												<td>
@@ -205,10 +197,23 @@
                                                     {% endif %}
                                                 </td>
 												<td>{{p.state}}</td>
-												<td>{{(p.created or '')[:10]}}</td>
-											</tr>
+                                                <td>{{(p.created or '')[:10]}}</td>
+
+                                                <td class="text-center" style="width: 140px;">
+                                                    <button
+                                                        class="btn btn-sm btn-outline-primary"
+                                                        type="button"
+                                                        data-bs-toggle="collapse"
+                                                        data-bs-target="#audit-{{ loop.index }}"
+                                                        aria-expanded="false"
+                                                        aria-controls="audit-{{ loop.index }}">
+                                                        <i class="bi bi-clock-history"></i>
+                                                        Audit History
+                                                    </button>
+                                                </td>
+                                            </tr>
                                             <tr>
-                                            <td colspan="8" class="p-0 border-0">
+                                            <td colspan="9" class="p-0 border-0">
                                                 <div class="collapse" id="audit-{{ loop.index }}">
                                                     <div class="card card-body m-2">
                                                         <h6>PR #{{ p.number }} — Audit History</h6>
@@ -289,11 +294,42 @@ document.addEventListener('DOMContentLoaded', function () {
                     const person = document.createElement('p');
                     person.className = 'mb-1 text-muted';
 
-                    person.textContent = `Performed by: ${event.performed_by}`;
+                    const actor = event.performed_by || 'Unknown';
 
-                    if (event.affected_person) {
-                        person.textContent +=
-                            ` | Assigned/requested person: ${event.affected_person}`;
+                    if (event.action === 'Pull request created') {
+                        person.textContent = `Created by: ${actor}`;
+                    }
+                    else if (event.action.startsWith('Review requested')) {
+                        person.textContent = `Requested by: ${actor}`;
+
+                        if (event.affected_person) {
+                            person.textContent += ` | Reviewer: ${event.affected_person}`;
+                        }
+                    }
+                    else if (event.action.startsWith('Assigned to')) {
+                        person.textContent = `Assigned by: ${actor}`;
+
+                        if (event.affected_person) {
+                            person.textContent += ` | Assignee: ${event.affected_person}`;
+                        }
+                    }
+                    else if (event.action === 'Pull request approved') {
+                        person.textContent = `Approved by: ${actor}`;
+                    }
+                    else if (event.action === 'Changes requested') {
+                        person.textContent = `Changes requested by: ${actor}`;
+                    }
+                    else if (event.action === 'Pull request merged') {
+                        person.textContent = `Merged by: ${actor}`;
+                    }
+                    else if (event.action === 'Pull request closed') {
+                        person.textContent = `Closed by: ${actor}`;
+                    }
+                    else if (event.action === 'Commit pushed') {
+                        person.textContent = `Committed by: ${actor}`;
+                    }
+                    else {
+                        person.textContent = `Action performed by: ${actor}`;
                     }
 
                     const timestamp = document.createElement('small');
@@ -331,7 +367,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 content.appendChild(timeline);
                 content.dataset.loaded = 'true';
 
-                content.dataset.loaded = 'true';
 
             } catch (error) {
                 content.textContent = error.message;

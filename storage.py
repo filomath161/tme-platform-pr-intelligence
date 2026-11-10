@@ -58,6 +58,17 @@ def init(path):
                 c.execute(
                     f"ALTER TABLE prs ADD COLUMN {column} {definition}"
                 )
+            # Track GitHub webhook deliveries to prevent duplicate processing
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS webhook_deliveries (
+                delivery_id TEXT PRIMARY KEY,
+                event_name TEXT NOT NULL,
+                action TEXT,
+                status TEXT NOT NULL,
+                received_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                processed_at TEXT
+            )
+        ''')
 
 
 def save(path, p):
@@ -273,3 +284,49 @@ def audit_events(path, repo=None, pr_number=None):
         result = c.execute(query, params).fetchall()
 
     return [dict(row) for row in result]
+
+
+def claim_webhook_delivery(path, delivery_id, event_name, action):
+    with db(path) as c:
+        cursor = c.execute('''
+            INSERT INTO webhook_deliveries (
+                delivery_id, event_name, action, status,
+                received_at, processed_at
+            )
+            VALUES (
+                ?, ?, ?, 'processing',
+                CURRENT_TIMESTAMP, NULL
+            )
+            ON CONFLICT(delivery_id) DO UPDATE SET
+                status = 'processing',
+                received_at = CURRENT_TIMESTAMP,
+                processed_at = NULL,
+                event_name = excluded.event_name,
+                action = excluded.action
+            WHERE
+                webhook_deliveries.status = 'processing'
+                AND webhook_deliveries.received_at
+                    < datetime('now', '-15 minutes')
+        ''', (delivery_id, event_name, action))
+
+        return cursor.rowcount == 1
+
+
+
+def complete_webhook_delivery(path, delivery_id):
+    with db(path) as c:
+        c.execute('''
+            UPDATE webhook_deliveries
+            SET status = 'completed',
+                processed_at = CURRENT_TIMESTAMP
+            WHERE delivery_id = ?
+        ''', (delivery_id,))
+
+
+def release_webhook_delivery(path, delivery_id):
+    with db(path) as c:
+        c.execute('''
+            DELETE FROM webhook_deliveries
+            WHERE delivery_id = ?
+              AND status = 'processing'
+        ''', (delivery_id,))

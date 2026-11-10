@@ -6,7 +6,10 @@ from parser import parse_changed_path
 from github_client import GitHubClient
 from storage import (
     init, save, rows, summary,
-    save_event, save_review, audit_events
+    save_event, save_review, audit_events,
+    claim_webhook_delivery,
+    complete_webhook_delivery,
+    release_webhook_delivery
 )
 import hmac
 import hashlib
@@ -16,6 +19,9 @@ import json
 REPOSITORY_CONFIGS = {
     "filomath161/tme-config-demo": "tme-config",
 }
+
+def get_repository_config(repo):
+    return REPOSITORY_CONFIGS.get(repo)
 
 load_dotenv()
 app=Flask(__name__); app.secret_key=os.getenv('FLASK_SECRET_KEY','local-dev-only-change-me')
@@ -227,10 +233,13 @@ def sync():
 
 @app.post('/webhook')
 def github_webhook():
+    # 1. Verify GitHub webhook signature
     secret = os.getenv('GITHUB_WEBHOOK_SECRET', '').strip()
 
     if not secret:
-        return jsonify({'error': 'Webhook secret is not configured'}), 500
+        return jsonify({
+            'error': 'Webhook secret is not configured'
+        }), 500
 
     signature = request.headers.get('X-Hub-Signature-256', '')
     payload_bytes = request.get_data()
@@ -242,35 +251,140 @@ def github_webhook():
     ).hexdigest()
 
     if not hmac.compare_digest(signature, expected_signature):
-        return jsonify({'error': 'Invalid webhook signature'}), 401
+        return jsonify({
+            'error': 'Invalid webhook signature'
+        }), 401
 
+    # 2. Identify the GitHub event
     event = request.headers.get('X-GitHub-Event', '')
 
     if event == 'ping':
-        return jsonify({'status': 'Webhook connected successfully'})
+        return jsonify({
+            'status': 'Webhook connected successfully'
+        }), 200
 
-    if event != 'pull_request':
-        return jsonify({'status': 'Event ignored', 'event': event}), 200
+    if event not in ('pull_request', 'pull_request_review'):
+        return jsonify({
+        'status': 'Event ignored',
+        'event': event
+    }), 200
 
+    # 3. Read the pull request payload
     payload = request.get_json(silent=True) or {}
     action = payload.get('action', '')
 
-    supported_actions = {
-        'opened', 'reopened', 'synchronize', 'closed'
+    if event == 'pull_request':
+        supported_actions = {
+    'opened',
+    'reopened',
+    'synchronize',
+    'closed',
+    'edited',
+    'assigned',
+    'unassigned',
+    'review_requested',
+    'review_request_removed'
+}
+    else:
+        supported_actions = {
+        'submitted'
     }
-
     if action not in supported_actions:
         return jsonify({
             'status': 'Action ignored',
             'action': action
         }), 200
 
-    return jsonify({
-        'status': 'Webhook received',
-        'repository': payload.get('repository', {}).get('full_name'),
-        'pull_request': payload.get('number'),
-        'action': action
-    }), 200
+    # 4. Identify repository and PR
+    repo = (payload.get('repository') or {}).get('full_name')
+    number = payload.get('number')
+
+    if not number:
+        number = (payload.get('pull_request') or {}).get('number')
+
+    if not repo or not number:
+        return jsonify({
+            'error': 'Repository or pull request number is missing'
+        }), 400
+
+    # 5. Find the repository's parser configuration
+    config_name = get_repository_config(repo)
+
+    if not config_name:
+        return jsonify({
+            'status': 'Repository ignored',
+            'reason': 'No repository configuration found',
+            'repository': repo
+        }), 200
+
+    # 6. Connect to GitHub and process the PR
+    token = os.getenv('GITHUB_TOKEN', '').strip()
+
+    if not token:
+        return jsonify({
+            'error': 'GITHUB_TOKEN is not configured'
+        }), 500
+
+        # 7. Identify this specific GitHub delivery
+    delivery_id = request.headers.get(
+        'X-GitHub-Delivery', ''
+    ).strip()
+
+    if not delivery_id:
+        return jsonify({
+            'error': 'GitHub delivery ID is missing'
+        }), 400
+
+    # 8. Claim the delivery before processing
+    claimed = claim_webhook_delivery(
+        DB,
+        delivery_id,
+        event,
+        action
+    )
+
+    if not claimed:
+        return jsonify({
+            'status': 'Duplicate delivery ignored',
+            'delivery_id': delivery_id
+        }), 200
+
+    try:
+        gh = GitHubClient(token)
+
+        process_pr(
+            gh,
+            repo,
+            int(number),
+            config_name
+        )
+
+        # Mark successful processing
+        complete_webhook_delivery(DB, delivery_id)
+
+        return jsonify({
+            'status': 'Pull request processed successfully',
+            'repository': repo,
+            'pull_request': int(number),
+            'action': action,
+            'delivery_id': delivery_id
+        }), 200
+
+    except Exception:
+        # Allow a failed delivery to be retried
+        release_webhook_delivery(DB, delivery_id)
+
+        app.logger.exception(
+            'Webhook processing failed for %s PR #%s',
+            repo,
+            number
+        )
+
+        return jsonify({
+            'error': 'Pull request processing failed',
+            'repository': repo,
+            'pull_request': number
+        }), 500
 
 @app.get('/admin')
 def admin():
