@@ -43,6 +43,13 @@
           </a>
           </li>
           <li class="nav-item">
+              <a href="{{ url_for('analytics') }}"
+                class="nav-link {% if request.endpoint == 'analytics' %}active{% endif %}">
+                  <i class="nav-icon bi bi-graph-up-arrow"></i>
+                  <p>Analytics</p>
+              </a>
+          </li>
+          <li class="nav-item">
             <a href="{{ url_for('admin') }}"
             class="nav-link {% if request.endpoint == 'admin' %}active{% endif %}">
               <i class="nav-icon bi bi-gear"></i>

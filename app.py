@@ -1,15 +1,20 @@
 import os
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, get_flashed_messages, render_template, request, redirect, url_for, flash
 from dotenv import load_dotenv
 from parser import parse_changed_path
 from github_client import GitHubClient
 from storage import (
-    init, save, rows, summary,
+    init, rows_for_active_repositories, save, rows, summary,
     save_event, save_review, audit_events,
     claim_webhook_delivery,
     complete_webhook_delivery,
-    release_webhook_delivery
+    release_webhook_delivery,
+    get_repositories,
+    add_repository,
+    get_services,
+    add_service,
+    set_repository_active
 )
 import hmac
 import hashlib
@@ -204,7 +209,7 @@ def process_pr(gh, repo, number, config_name):
 
 @app.get('/')
 def index():
-    all_rows=rows(DB); repo=request.args.get('repo',''); service=request.args.get('service',''); env=request.args.get('environment',''); state=request.args.get('state','')
+    all_rows = rows_for_active_repositories(DB); repo=request.args.get('repo',''); service=request.args.get('service',''); env=request.args.get('environment',''); state=request.args.get('state','')
     filtered=[r for r in all_rows if (not repo or r['repo']==repo) and (not service or service in r['services']) and (not env or env in r['environments']) and (not state or r['state'] == state)]
     return render_template('dashboard.html', prs=filtered, data=summary(filtered), all_data=summary(all_rows), filters={'repo':repo,'service':service,'environment':env,'state':state})
 
@@ -388,8 +393,99 @@ def github_webhook():
 
 @app.get('/admin')
 def admin():
-    return render_template('admin.html')
+    repositories = get_repositories(DB)
+    services = get_services(DB)
+    return render_template(
+        'admin.html',
+        repositories=repositories,
+        services=services
+    )
 
+@app.post('/admin')
+def add_repository_route():
+    repo_full_name = request.form.get('repo_full_name', '').strip()
+    config_name = request.form.get('config_name', '').strip()
+
+    if not repo_full_name or not config_name:
+        flash('Repository name and configuration are required.', 'danger')
+        return redirect(url_for('admin'))
+
+    try:
+        add_repository(
+            DB,
+            repo_full_name,
+            config_name
+        )
+        flash('Repository added successfully!', 'success')
+
+    except Exception as e:
+        flash(f'Unable to add repository: {e}', 'danger')
+
+    return redirect(url_for('admin'))
+
+@app.post('/admin/services')
+def register_service():
+    service_name = request.form.get('service_name', '').strip()
+    repository_id = request.form.get('repository_id', '').strip()
+    component_owner = request.form.get('component_owner', '').strip()
+
+    if not service_name or not repository_id:
+        flash('Service name and repository are required.', 'danger')
+        return redirect(url_for('admin'))
+
+    try:
+        add_service(
+            DB,
+            service_name,
+            int(repository_id),
+            component_owner or None
+        )
+
+        flash('Service registered successfully!', 'success')
+
+    except ValueError:
+        flash('Invalid repository selection.', 'danger')
+
+    except Exception as e:
+        flash(f'Unable to register service: {e}', 'danger')
+
+    return redirect(url_for('admin'))
+
+@app.post('/admin/repositories/<int:repository_id>/status')
+def update_repository_status(repository_id):
+    status = request.form.get('is_active', '')
+
+    if status not in ('0', '1'):
+        flash('Invalid repository status.', 'danger')
+        return redirect(url_for('admin'))
+
+    try:
+        updated = set_repository_active(
+            DB,
+            repository_id,
+            status == '1'
+        )
+
+        if updated:
+            message = 'Repository activated.' if status == '1' else 'Repository deactivated.'
+            flash(message, 'success')
+        else:
+            flash('Repository not found.', 'danger')
+
+    except Exception as e:
+        flash(f'Unable to update repository status: {e}', 'danger')
+
+    return redirect(url_for('admin'))
+
+@app.get('/analytics')
+def analytics():
+    all_rows = rows_for_active_repositories(DB)
+    analytics_data = summary(all_rows)
+
+    return render_template(
+        'analytics.html',
+        data=analytics_data
+    )
 
 @app.get('/audit')
 def audit_feed():

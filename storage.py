@@ -59,8 +59,8 @@ def init(path):
                     f"ALTER TABLE prs ADD COLUMN {column} {definition}"
                 )
             # Track GitHub webhook deliveries to prevent duplicate processing
-            c.execute('''
-                CREATE TABLE IF NOT EXISTS webhook_deliveries (
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS webhook_deliveries (
                 delivery_id TEXT PRIMARY KEY,
                 event_name TEXT NOT NULL,
                 action TEXT,
@@ -69,6 +69,33 @@ def init(path):
                 processed_at TEXT
             )
         ''')
+                
+        # Store repositories managed through the Admin page
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS repositories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repo_full_name TEXT NOT NULL UNIQUE,
+                config_name TEXT NOT NULL,
+                component_owner TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+                # Store services and their ownership
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS services (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                service_name TEXT NOT NULL UNIQUE,
+                repository_id INTEGER NOT NULL,
+                component_owner TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+                FOREIGN KEY (repository_id)
+                    REFERENCES repositories(id)
+            )
+        ''')
+
 
 
 def save(path, p):
@@ -143,6 +170,22 @@ def rows(path):
     for r in data:
         for k in ('services','environments','applications','paths','reviewers','approvers'): r[k]=json.loads(r[k] or '[]')
     return data
+
+def rows_for_active_repositories(path):
+    data = rows(path)
+
+    with db(path) as c:
+        active_repos = {
+            row['repo_full_name']
+            for row in c.execute(
+                'SELECT repo_full_name FROM repositories WHERE is_active = 1'
+            ).fetchall()
+        }
+
+    return [
+        r for r in data
+        if r['repo'] in active_repos
+    ]
 
 def summary(data):
     merged=[r for r in data if r['state']=='merged']; opened=[r for r in data if r['state']=='open']
@@ -330,3 +373,73 @@ def release_webhook_delivery(path, delivery_id):
             WHERE delivery_id = ?
               AND status = 'processing'
         ''', (delivery_id,))
+
+def get_repositories(path):
+    with db(path) as c:
+        result = c.execute('''
+            SELECT
+                id,
+                repo_full_name,
+                config_name,
+                component_owner,
+                is_active,
+                created_at
+            FROM repositories
+            ORDER BY repo_full_name
+        ''').fetchall()
+
+    return [dict(row) for row in result]
+
+def add_repository(path, repo_full_name, config_name, component_owner=None):
+    with db(path) as c:
+        cursor = c.execute('''
+            INSERT INTO repositories (
+                repo_full_name,
+                config_name,
+                component_owner
+            )
+            VALUES (?, ?, ?)
+        ''', (repo_full_name, config_name, component_owner))
+
+        return cursor.lastrowid
+def add_service(path, service_name, repository_id, component_owner=None):
+    with db(path) as c:
+        cursor = c.execute('''
+            INSERT INTO services (
+                service_name,
+                repository_id,
+                component_owner
+            )
+            VALUES (?, ?, ?)
+        ''', (service_name, repository_id, component_owner))
+
+        return cursor.lastrowid
+    
+def get_services(path):
+    with db(path) as c:
+        result = c.execute('''
+            SELECT
+                s.id,
+                s.service_name,
+                s.repository_id,
+                r.repo_full_name,
+                s.component_owner,
+                s.is_active,
+                s.created_at
+            FROM services s
+            JOIN repositories r
+                ON s.repository_id = r.id
+            ORDER BY s.service_name
+        ''').fetchall()
+
+    return [dict(row) for row in result]
+
+def set_repository_active(path, repository_id, is_active):
+    with db(path) as c:
+        cursor = c.execute('''
+            UPDATE repositories
+            SET is_active = ?
+            WHERE id = ?
+        ''', (1 if is_active else 0, repository_id))
+
+        return cursor.rowcount == 1

@@ -5,10 +5,214 @@
 {% block page_heading %}Administration{% endblock %}
 
 {% block content %}
-    <div class="card">
+<div class="card card-primary">
+    <div class="card-header">
+        <h3 class="card-title">Register New Repository</h3>
+    </div>
+
+    <form method="POST" action="{{ url_for('add_repository_route') }}">
         <div class="card-body">
-            <h5>Repository Management</h5>
-            <p>Manage platform repositories and configurations here.</p>
+
+            <div class="mb-3">
+                <label for="repo_full_name" class="form-label">
+                    GitHub Repository
+                </label>
+                <input
+                    type="text"
+                    class="form-control"
+                    id="repo_full_name"
+                    name="repo_full_name"
+                    placeholder="organisation/repository-name"
+                    required
+                >
+            </div>
+
+            <div class="mb-3">
+                <label for="config_name" class="form-label">
+                    Configuration Name
+                </label>
+                <input
+                    type="text"
+                    class="form-control"
+                    id="config_name"
+                    name="config_name"
+                    placeholder="e.g. tme-config"
+                    required
+                >
+            </div>
+
+        <div class="card-footer">
+            <button type="submit" class="btn btn-primary">
+                Add Repository
+            </button>
+        </div>
+    </form>
+</div>
+
+<div class="card card-success">
+    <div class="card-header">
+        <h3 class="card-title">Register New Service</h3>
+    </div>
+
+    <form method="POST" action="{{ url_for('register_service') }}">
+        <div class="card-body">
+
+            <div class="mb-3">
+                <label for="service_name" class="form-label">
+                    Service Name
+                </label>
+                <input
+                    type="text"
+                    class="form-control"
+                    id="service_name"
+                    name="service_name"
+                    placeholder="e.g. CLM, MFT, Concourse"
+                    required
+                >
+            </div>
+
+            <div class="mb-3">
+                <label for="repository_id" class="form-label">
+                    Associated Repository
+                </label>
+                <select
+                    class="form-select"
+                    id="repository_id"
+                    name="repository_id"
+                    required
+                >
+                    <option value="">Select a repository</option>
+
+                    {% for repo in repositories %}
+                        {% if repo.is_active %}
+                            <option value="{{ repo.id }}">
+                                {{ repo.repo_full_name }}
+                            </option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <input
+                    type="text"
+                    class="form-control"
+                    id="component_owner"
+                    name="component_owner"
+                    placeholder="Person responsible for this service"
+                >
+            </div>
+
+        </div>
+
+        <div class="card-footer">
+            <button type="submit" class="btn btn-success">
+                Register Service
+            </button>
+        </div>
+    </form>
+</div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Repository Management</h3>
+        </div>
+
+        <div class="card-body table-responsive">
+            <table class="table table-bordered table-hover">
+                <thead>
+                    <tr>
+                        <th>Repository</th>
+                        <th>Configuration</th>
+                        <th>Status</th>
+                        <th>Created At</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for repo in repositories %}
+                    <tr>
+                        <td>{{ repo.repo_full_name }}</td>
+                        <td>{{ repo.config_name }}</td>
+                        <td>
+                            {% if repo.is_active %}
+                                <span class="badge text-bg-success">Active</span>
+                            {% else %}
+                                <span class="badge text-bg-secondary">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ repo.created_at }}</td>
+                        <td>
+                            <form method="POST"
+                                  action="{{ url_for('update_repository_status', repository_id=repo.id) }}">
+                                {% if repo.is_active %}
+                                    <input type="hidden" name="is_active" value="0">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        Deactivate
+                                    </button>
+                                {% else %}
+                                    <input type="hidden" name="is_active" value="1">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        Activate
+                                    </button>
+                                {% endif %}
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">
+                            No repositories registered yet.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Service Management</h3>
+    </div>
+
+    <div class="card-body table-responsive">
+        <table class="table table-bordered table-hover">
+            <thead>
+                <tr>
+                    <th>Service</th>
+                    <th>Repository</th>
+                    <th>Component Owner</th>
+                    <th>Status</th>
+                    <th>Created At</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for service in services %}
+                <tr>
+                    <td>{{ service.service_name }}</td>
+                    <td>{{ service.repo_full_name }}</td>
+                    <td>{{ service.component_owner or 'Not assigned' }}</td>
+                    <td>
+                        {% if service.is_active %}
+                            <span class="badge text-bg-success">Active</span>
+                        {% else %}
+                            <span class="badge text-bg-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ service.created_at }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted">
+                        No services registered yet.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
 {% endblock %}
